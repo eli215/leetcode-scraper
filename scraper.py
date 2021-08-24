@@ -1,83 +1,63 @@
 import os
 from dotenv import load_dotenv
-
+from selenium import webdriver
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
-from selenium import webdriver
-from pathlib import Path
-import json
-
-# import pyautogui
-# import requests
-# from bs4 import BeautifulSoup
-# import pandas as pd
-# import selenium
+import pyautogui
 
 
-def save_cookies(driver: WebDriver, cookie_filename: str):
-    cookies = driver.get_cookies()
-    with open(cookie_filename, 'w', newline='') as cookie_file:
-        json.dump(cookies, cookie_file)
+# Note: research logging best practices
+LOGFILE = "leetcode_scraper_log.txt"
 
-def load_cookies(driver: WebDriver, cookie_filename: str):
-    driver.get("https://leetcode.com")
-    with open(cookie_filename, 'r', newline='') as cookie_file:
-        cookies = json.load(cookie_file)
-        for cookie in cookies:
-            driver.add_cookie(cookie)
-        driver.refresh()
 
 def main():
+    # Initial setup
     load_dotenv()   # Load .env file
     dirname = os.path.dirname(__file__)
     chromedata_dir = os.path.join(dirname, 'ChromeData')
 
+    # Initialize webdriver
     options = webdriver.ChromeOptions()
     options.add_argument(f"--user-data-dir={chromedata_dir}")
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, timeout=60)
     
-    if not is_logged_in():
-        log_in() 
     # Log in to Leetcode
-       # cookies_filename = 'cookies.json'
-    # site_login(driver, wait)
-
-    # save_cookies(driver, cookies_filename)
-    # driver.close()
-
-    # options = webdriver.ChromeOptions()
-    # driver = webdriver.Chrome(options=options)
-
-    # load_cookies(driver, cookies_filename)
-    # site_login(driver, wait)
-    # driver.get("https://leetcode.com/")
-    # with open('cookies.json', 'r', newline='') as cookie_file:
-    #     cookies = json.load(cookie_file)
-    #     for cookie in cookies:
-    #         driver.add_cookie(cookie)
-    #     driver.refresh()
-    # load_cookie(driver, 'cookies.json')
-
+    if not is_logged_in():
+        log_in(driver, wait) 
     
-
+    # Navigate to problem URL, check validity (?)
+    # - flag whether it has a Solution page?
     # url = 'https://leetcode.com/problems/arranging-coins/'
     # driver.get(url)
-    breakpoint()
-    
-    print("end ")
+
+    # Modify Description page HTML w/ JS
+    # - remove code window on right
     """
     var element = document.querySelector(".editor-wrapper__1ru6");
     if (element)
         element.parentNode.removeChild(element);
     """
+    # - set left flexbox fill to '1' to fill page width
+    # - if Solution exists, set its menu item href to our local copy
+
+
+    # Save Description page w/ right click Save As
+
+    # Navigate to Solution URL (if applicable)
+
+    # Modify page HTML w/ JS
+    # - same stuff as above
+    # - set Description menu item href to our local copy
+
 
 def is_logged_in(driver: WebDriver):
     pass
+
 
 def log_in(webdr: WebDriver, wait: WebDriverWait):
     login_url = "https://leetcode.com/accounts/login/"
@@ -97,15 +77,6 @@ def log_in(webdr: WebDriver, wait: WebDriverWait):
             # save_cookie(webdr, 'cookies.json')
         except TimeoutException:
             print("Timed out waiting for page to load")
-
-def load_cookie(driver, path):
-    driver.delete_all_cookies()
-    with open(path, 'r') as cookiesfile:
-        cookies = json.load(cookiesfile)
-        driver.get("https://leetcode.com")
-        for cookie in cookies:
-            driver.add_cookie(cookie)
-        driver.refresh()
 
 
 if __name__ == "__main__":

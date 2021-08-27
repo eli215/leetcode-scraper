@@ -1,4 +1,5 @@
 import os
+from time import sleep
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.webdriver import WebDriver
@@ -12,7 +13,8 @@ import pyautogui
 
 # Note: research logging best practices
 LOGFILE = "leetcode_scraper_log.txt"
-
+HOME_URL = "https://leetcode.com"
+LOGIN_URL = "https://leetcode.com/accounts/login"
 
 def main():
     # Initial setup
@@ -25,10 +27,14 @@ def main():
     options.add_argument(f"--user-data-dir={chromedata_dir}")
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, timeout=60)
+
+    driver.get(HOME_URL)
+    # Log in to Leetcode if necessary
+    if not is_logged_in(driver, wait):
+        log_in(driver, wait)
     
-    # Log in to Leetcode
-    if not is_logged_in():
-        log_in(driver, wait) 
+    print(is_logged_in(driver, wait))
+    breakpoint()
     
     # Navigate to problem URL, check validity (?)
     # - flag whether it has a Solution page?
@@ -55,26 +61,32 @@ def main():
     # - set Description menu item href to our local copy
 
 
-def is_logged_in(driver: WebDriver):
-    pass
+def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:
+    # wait.until(lambda driver: driver.execute_script('return document.readyState') == 'complete')
+    # XPath query of the HTML for an 'isSignedIn' property that should be nested in a <script> tag
+    return driver.execute_script("""
+        return document.evaluate("//html[contains(., 'isSignedIn: true')]", 
+            document, null, XPathResult.BOOLEAN_TYPE, null ).booleanValue;
+    """)
 
 
-def log_in(webdr: WebDriver, wait: WebDriverWait):
-    login_url = "https://leetcode.com/accounts/login/"
-    usr = os.getenv('LEETCODE_USR')
-    pwd = os.getenv('LEETCODE_PWD')
+def log_in(driver: WebDriver, wait: WebDriverWait):
+    username = os.getenv('LEETCODE_USERNAME')
+    password = os.getenv('LEETCODE_PASSWORD')
 
-    if usr and pwd:
-        webdr.get(login_url)
+    if username and password:
+        driver.get(LOGIN_URL)
 
         try:
             loading_is_finished = EC.invisibility_of_element((By.CLASS_NAME, "spinner"))
             wait.until(loading_is_finished)
 
-            webdr.find_element_by_name("login").send_keys(usr)
-            webdr.find_element_by_name("password").send_keys(pwd)
-            webdr.find_element_by_id("signin_btn").click()
-            # save_cookie(webdr, 'cookies.json')
+            driver.find_element_by_name("login").send_keys(username)
+            driver.find_element_by_name("password").send_keys(password)
+            driver.find_element_by_id("signin_btn").click()
+            #TODO improve this. page will hang forever if login fails and page never redirects.
+            # Wait for page to redirect before finishing
+            wait.until(EC.url_changes(LOGIN_URL))
         except TimeoutException:
             print("Timed out waiting for page to load")
 

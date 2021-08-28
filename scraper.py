@@ -33,14 +33,19 @@ def main():
     if not is_logged_in(driver, wait):
         log_in(driver, wait)
     
-    print(is_logged_in(driver, wait))
-    breakpoint()
-    
+    # Collect all problem URLs from problemset pages
+    # Add to a JSON file?
+    # Loop through all problems (that aren't already downloaded?)
+
     # Navigate to problem URL, check validity (?)
     # - flag whether it has a Solution page?
-    # url = 'https://leetcode.com/problems/arranging-coins/'
-    # driver.get(url)
+    url = 'https://leetcode.com/problems/arranging-coins/'
+    driver.get(url)
 
+    has_solution = driver.execute_script("""
+        return document.querySelector('[data-key="solution"]').getAttribute("data-disabled") == true;
+    """)
+    breakpoint()
     # Modify Description page HTML w/ JS
     # - remove code window on right
     """
@@ -62,7 +67,6 @@ def main():
 
 
 def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:
-    # wait.until(lambda driver: driver.execute_script('return document.readyState') == 'complete')
     # XPath query of the HTML for an 'isSignedIn' property that should be nested in a <script> tag
     return driver.execute_script("""
         return document.evaluate("//html[contains(., 'isSignedIn: true')]", 
@@ -85,6 +89,8 @@ def log_in(driver: WebDriver, wait: WebDriverWait):
             driver.find_element_by_name("password").send_keys(password)
             driver.find_element_by_id("signin_btn").click()
             #TODO improve this. page will hang forever if login fails and page never redirects.
+            # data-is-error="true" if userid/password fields are blank
+            # <p data-cy="sign-in-error" exists after failed login
             # Wait for page to redirect before finishing
             wait.until(EC.url_changes(LOGIN_URL))
         except TimeoutException:

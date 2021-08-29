@@ -8,12 +8,13 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
+import re
 import pyautogui
 
 # Note: research logging best practices
 LOGFILE = "leetcode_scraper_log.txt"
-HOME_URL = "https://leetcode.com"
+BASE_URL = "https://leetcode.com"
 LOGIN_URL = "https://leetcode.com/accounts/login"
 
 def main():
@@ -28,25 +29,14 @@ def main():
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, timeout=60)
 
-    driver.get(HOME_URL)
+    driver.get(BASE_URL)
     # Log in to Leetcode if necessary
     if not is_logged_in(driver, wait):
         log_in(driver, wait)
     
     # Collect all problem URLs from problemset pages
     # Add to a JSON file?
-    """
-    title:
-    url:
-    filename:
-    solution {
-        type:
-        exists:
-    }
-    acceptance:
-    difficulty:
-    frequency:
-    """
+
     # Loop through all problems (that aren't already downloaded?)
 
     # Navigate to problem URL, check validity (?)
@@ -79,13 +69,44 @@ def main():
     # - same stuff as above
     # - set Description menu item href to our local copy
 
-
+    """
+    title:
+    number:
+    url:
+    filename:
+    solution {
+        has_video:
+    }
+    acceptance:
+    difficulty:
+    frequency:
+    tags 
+    """
 def update_problemset(driver: WebDriver, wait: WebDriverWait):
+    """Scrape problemset data & write it to a JSON file."""
+    """
+     Additional notes:
+
+    # freq --> class="h-full absolute rounded-full transition-all ease-out duration-300 bg-brand-orange dark:bg-dark-brand-orange
+            
+    """
 
     PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
     driver.get(PROBLEMSET_URL)
 
     finished = False
+    data = []
+
+    def parse_solution_type(cell: Tag) -> dict:
+        """Determine solution type from cell html."""
+        classname = cell.find('svg')['class']
+
+        if "text-blue" in classname:  # article: "w-5 h-5 text-blue dark:text-dark-blue"
+            return {'has_video' : False}
+        if "text-purple" in classname:  # video: "w-5 h-5 text-purple dark:text-dark-purple"
+            return {'has_video' : True}
+        else:   # none: "w-5 h-5 text-gray-5 dark:text-dark-gray-5"
+            return None
 
     while not finished:
 
@@ -97,11 +118,18 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
 
         soup = BeautifulSoup(table_html, 'html.parser')
         # rows = soup.findAll("div", {"role" : "row"})
-        for row in soup.find_all("div", {"role" : "row"}):
-            # cells = BeautifulSoup(row, "html.parser").findAll("div", {"role" : "cell"})
+        for i, row in enumerate(soup.find_all("div", {"role" : "row"})):
             cells = row.find_all("div", {"role" : "cell"})
-            url1 = cells[1].find('a')['href']
-            print(url1)
+            row_data = dict()
+            row_data['url'] = BASE_URL + cells[1].find('a')['href']
+            row_data['number'], row_data['title'] = cells[1].get_text().split('. ', 1)
+            row_data['solution'] = parse_solution_type(cells[2])
+            row_data['acceptance'] = float(cells[3].get_text()[:-1])
+            row_data['difficulty'] = cells[4].get_text()
+            row_data['frequency'] = float(cells[5].select('div[class*="bg-brand-orange"]')[0]['style'][7:-2])
+            
+            breakpoint()
+            data.append(row_data)
                                
         finished = True
 

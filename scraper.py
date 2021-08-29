@@ -8,8 +8,8 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from bs4 import BeautifulSoup
 import pyautogui
-
 
 # Note: research logging best practices
 LOGFILE = "leetcode_scraper_log.txt"
@@ -35,16 +35,30 @@ def main():
     
     # Collect all problem URLs from problemset pages
     # Add to a JSON file?
+    """
+    title:
+    url:
+    filename:
+    solution {
+        type:
+        exists:
+    }
+    acceptance:
+    difficulty:
+    frequency:
+    """
     # Loop through all problems (that aren't already downloaded?)
 
     # Navigate to problem URL, check validity (?)
     # - flag whether it has a Solution page?
-    url = 'https://leetcode.com/problems/arranging-coins/'
-    driver.get(url)
+    # url = 'https://leetcode.com/problems/arranging-coins/'
+    # driver.get(url)
 
-    has_solution = driver.execute_script("""
-        return document.querySelector('[data-key="solution"]').getAttribute("data-disabled") == true;
-    """)
+    # has_solution = driver.execute_script("""
+    #     return document.querySelector('[data-key="solution"]').getAttribute("data-disabled") == true;
+    # """)
+
+    update_problemset(driver, wait)
     breakpoint()
     # Modify Description page HTML w/ JS
     # - remove code window on right
@@ -64,6 +78,43 @@ def main():
     # Modify page HTML w/ JS
     # - same stuff as above
     # - set Description menu item href to our local copy
+
+
+def update_problemset(driver: WebDriver, wait: WebDriverWait):
+
+    PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
+    driver.get(PROBLEMSET_URL)
+
+    finished = False
+
+    while not finished:
+
+        table_html = driver.execute_script(
+            """
+                return document.querySelector('div[role="rowgroup"]').innerHTML;
+            """
+        )
+
+        soup = BeautifulSoup(table_html, 'html.parser')
+        # rows = soup.findAll("div", {"role" : "row"})
+        for row in soup.find_all("div", {"role" : "row"}):
+            # cells = BeautifulSoup(row, "html.parser").findAll("div", {"role" : "cell"})
+            cells = row.find_all("div", {"role" : "cell"})
+            url1 = cells[1].find('a')['href']
+            print(url1)
+                               
+        finished = True
+
+    breakpoint()
+    # For each row in <div role="rowgroup">
+
+        # For each cell in each row
+
+    
+    # If '>' button (next page of problems) is NOT disabled, click it and continue
+    # Else, we're done
+
+    pass
 
 
 def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:

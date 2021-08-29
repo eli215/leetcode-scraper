@@ -1,4 +1,5 @@
 import os
+import sys
 from time import sleep
 from dotenv import load_dotenv
 from selenium import webdriver
@@ -13,19 +14,19 @@ import re
 import pyautogui
 
 # Note: research logging best practices
-LOGFILE = "leetcode_scraper_log.txt"
+# LOGFILE = "leetcode_scraper_log.txt"
 BASE_URL = "https://leetcode.com"
-LOGIN_URL = "https://leetcode.com/accounts/login"
 
 def main():
     # Initial setup
+    args = sys.argv[1:]
     load_dotenv()   # Load .env file
-    dirname = os.path.dirname(__file__)
-    chromedata_dir = os.path.join(dirname, 'ChromeData')
+    DIRNAME = os.path.dirname(__file__)
+    CHROMEDATA_DIR = os.path.join(DIRNAME, 'ChromeData')
 
     # Initialize webdriver
     options = webdriver.ChromeOptions()
-    options.add_argument(f"--user-data-dir={chromedata_dir}")
+    options.add_argument(f"--user-data-dir={CHROMEDATA_DIR}")
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, timeout=60)
 
@@ -35,12 +36,12 @@ def main():
         log_in(driver, wait)
     
     # Collect all problem URLs from problemset pages
-    # Add to a JSON file?
+    # Add to a JSON file
+    update_problemset(driver, wait)
 
-    # Loop through all problems (that aren't already downloaded?)
+    # Loop through all problems
 
-    # Navigate to problem URL, check validity (?)
-    # - flag whether it has a Solution page?
+    # Navigate to problem URL
     # url = 'https://leetcode.com/problems/arranging-coins/'
     # driver.get(url)
 
@@ -48,8 +49,6 @@ def main():
     #     return document.querySelector('[data-key="solution"]').getAttribute("data-disabled") == true;
     # """)
 
-    update_problemset(driver, wait)
-    breakpoint()
     # Modify Description page HTML w/ JS
     # - remove code window on right
     """
@@ -60,6 +59,7 @@ def main():
     # - set left flexbox fill to '1' to fill page width
     # - if Solution exists, set its menu item href to our local copy
 
+    # Scrape tags and add them to JSON file
 
     # Save Description page w/ right click Save As
 
@@ -74,22 +74,18 @@ def main():
     number:
     url:
     filename:
-    solution {
+    solution: {
         has_video:
     }
     acceptance:
     difficulty:
     frequency:
-    tags 
+    tags: {
+
+    }
     """
 def update_problemset(driver: WebDriver, wait: WebDriverWait):
     """Scrape problemset data & write it to a JSON file."""
-    """
-     Additional notes:
-
-    # freq --> class="h-full absolute rounded-full transition-all ease-out duration-300 bg-brand-orange dark:bg-dark-brand-orange
-            
-    """
 
     PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
     driver.get(PROBLEMSET_URL)
@@ -108,16 +104,16 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
         else:   # none: "w-5 h-5 text-gray-5 dark:text-dark-gray-5"
             return None
 
-    while not finished:
+    # TODO: ensure view "100 / page" is selected from dropdown
 
+    while not finished:
         table_html = driver.execute_script(
             """
                 return document.querySelector('div[role="rowgroup"]').innerHTML;
             """
         )
-
         soup = BeautifulSoup(table_html, 'html.parser')
-        # rows = soup.findAll("div", {"role" : "row"})
+        # TODO: skip the first row of the first page somehow
         for i, row in enumerate(soup.find_all("div", {"role" : "row"})):
             cells = row.find_all("div", {"role" : "cell"})
             row_data = dict()
@@ -127,25 +123,20 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
             row_data['acceptance'] = float(cells[3].get_text()[:-1])
             row_data['difficulty'] = cells[4].get_text()
             row_data['frequency'] = float(cells[5].select('div[class*="bg-brand-orange"]')[0]['style'][7:-2])
-            
-            breakpoint()
+            #row_data['tags'] = {}
             data.append(row_data)
-                               
+            # breakpoint()
+
+        # TODO: implement the following
+        # If '>' button (next page of problems) is NOT disabled, click it and continue
+        # Else, we're done              
         finished = True
 
-    breakpoint()
-    # For each row in <div role="rowgroup">
-
-        # For each cell in each row
-
-    
-    # If '>' button (next page of problems) is NOT disabled, click it and continue
-    # Else, we're done
-
-    pass
+    breakpoint()  
 
 
 def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:
+    """Check if browser session is currently signed in."""
     # XPath query of the HTML for an 'isSignedIn' property that should be nested in a <script> tag
     return driver.execute_script("""
         return document.evaluate("//html[contains(., 'isSignedIn: true')]", 
@@ -154,6 +145,8 @@ def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:
 
 
 def log_in(driver: WebDriver, wait: WebDriverWait):
+    """Log in using credentials in .env file."""
+    LOGIN_URL = "https://leetcode.com/accounts/login"
     username = os.getenv('LEETCODE_USERNAME')
     password = os.getenv('LEETCODE_PASSWORD')
 
@@ -167,12 +160,13 @@ def log_in(driver: WebDriver, wait: WebDriverWait):
             driver.find_element_by_name("login").send_keys(username)
             driver.find_element_by_name("password").send_keys(password)
             driver.find_element_by_id("signin_btn").click()
-            #TODO improve this. page will hang forever if login fails and page never redirects.
+            #TODO improve this. wait will timeout if login fails and page never redirects.
             # data-is-error="true" if userid/password fields are blank
             # <p data-cy="sign-in-error" exists after failed login
             # Wait for page to redirect before finishing
             wait.until(EC.url_changes(LOGIN_URL))
         except TimeoutException:
+            # TODO: Handle this
             print("Timed out waiting for page to load")
 
 

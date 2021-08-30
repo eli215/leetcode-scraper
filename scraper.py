@@ -90,7 +90,7 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
     PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
     driver.get(PROBLEMSET_URL)
 
-    finished = False
+    has_next_page = True
     data = []
 
     def parse_solution_type(cell: Tag) -> dict:
@@ -106,7 +106,7 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
 
     # TODO: ensure view "100 / page" is selected from dropdown
 
-    while not finished:
+    while has_next_page:
         table_html = driver.execute_script(
             """
                 return document.querySelector('div[role="rowgroup"]').innerHTML;
@@ -114,11 +114,11 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
         )
         soup = BeautifulSoup(table_html, 'html.parser')
         # TODO: skip the first row of the first page somehow
-        for i, row in enumerate(soup.find_all("div", {"role" : "row"})):
+        for i, row in enumerate(soup.find_all('div', {'role' : "row"})):
             cells = row.find_all("div", {"role" : "cell"})
             row_data = dict()
             row_data['url'] = BASE_URL + cells[1].find('a')['href']
-            row_data['number'], row_data['title'] = cells[1].get_text().split('. ', 1)
+            row_data['number'], row_data['title'] = cells[1].get_text().split(". ", 1)
             row_data['solution'] = parse_solution_type(cells[2])
             row_data['acceptance'] = float(cells[3].get_text()[:-1])
             row_data['difficulty'] = cells[4].get_text()
@@ -127,10 +127,27 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
             data.append(row_data)
             # breakpoint()
 
-        # TODO: implement the following
+        next_btn_css_selector = 'nav[role="navigation"] > button:last-of-type'
+        has_next_page = not driver.execute_script(
+            f"""
+                return document.querySelector('{next_btn_css_selector}').hasAttribute("disabled")
+            """
+        )
+
+        if has_next_page:
+            try:
+                next_btn_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, next_btn_css_selector))
+                wait.until(next_btn_clickable)
+                driver.find_element_by_css_selector(next_btn_css_selector).click()
+                # TODO: wait for table element to be clickable to indicate next page has loaded
+
+            except TimeoutException:
+              pass  
+        
+        # <nav role="navigation" class="mb-6 md:mb-0 flex flex-nowrap items-center space-x-2">
         # If '>' button (next page of problems) is NOT disabled, click it and continue
         # Else, we're done              
-        finished = True
+
 
     breakpoint()  
 
@@ -145,7 +162,7 @@ def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:
 
 
 def log_in(driver: WebDriver, wait: WebDriverWait):
-    """Log in using credentials in .env file."""
+    """Log in using credentials from .env file."""
     LOGIN_URL = "https://leetcode.com/accounts/login"
     username = os.getenv('LEETCODE_USERNAME')
     password = os.getenv('LEETCODE_PASSWORD')

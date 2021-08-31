@@ -85,7 +85,7 @@ def main():
 
     }
     """
-def update_problemset(driver: WebDriver, wait: WebDriverWait):
+def update_problemset(driver: WebDriver, wait: WebDriverWait) -> None:
     """Scrape problemset data & write it to a JSON file."""
 
     PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
@@ -104,43 +104,49 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
         else:   # none: "w-5 h-5 text-gray-5 dark:text-dark-gray-5"
             return None
 
-    # TODO: skip the first row of the first page somehow (if it's special)
-    FIRST_ROW_CSS_SEL = 'div[role="rowgroup"] > div:first-of-type'
+    # Remove the first row if it's an out-of-sequence problem promoted by LeetCode
+    TABLE_CSS_SEL = 'div[role="rowgroup"]'
+    FIRST_ROW_CSS_SEL = f'{TABLE_CSS_SEL} > div:first-of-type'
+    DROPDOWN_ID = 'headlessui-listbox-button-13'
+
+    tablesize_setting = int(driver.execute_script(f"""
+        return document.querySelector('#{DROPDOWN_ID}').innerText;
+    """)[:-7])      # trim " / page" from the string
+
+    tablesize_actual = driver.execute_script(f"""
+        return document.querySelector('{TABLE_CSS_SEL}').childElementCount;
+    """)
+    
+    if tablesize_actual > tablesize_setting:
+        driver.execute_script(f"""
+            var row1 = document.querySelector('{FIRST_ROW_CSS_SEL}');
+            if (row1)
+                row1.parentNode.removeChild(row1);
+        """)
+        tablesize_actual -= 1
+
+    # Make sure table size dropdown is set to view 100 problems per page 
     first_row_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, FIRST_ROW_CSS_SEL))
 
-    # row1_is_special = 
-    # var row1 = document.querySelector('div[role="rowgroup"] > div:first-of-type');
-    # driver.find_element_by_css_selector(first_row_css_sel)
-    """
-    var element = document.querySelector(".editor-wrapper__1ru6");
-    if (element)
-        element.parentNode.removeChild(element);
-    """
-
-    # Make sure table size dropdown is set to view 100 problems per page
-    tablesize_is_100 = driver.execute_script("""
-        return document.querySelector('#headlessui-listbox-button-13').innerText == "100 / page";
-        """)
-
-    if not tablesize_is_100:
-        DROPDOWN_ID = 'headlessui-listbox-button-13'
+    if tablesize_setting != 100:
         DROPDOWN_OPTION_CSS_SEL = f'ul[aria-labelledby="{DROPDOWN_ID}"] > li:last-of-type'  # last option is "100 / page"
         dropdown_option_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, DROPDOWN_OPTION_CSS_SEL))
-
-        driver.find_element_by_id(DROPDOWN_ID).click()
-        wait.until(dropdown_option_clickable)
-        driver.find_element_by_css_selector(DROPDOWN_OPTION_CSS_SEL).click()    
-        wait.until(first_row_clickable)     # wait until table reloads
+        try:
+            driver.find_element_by_id(DROPDOWN_ID).click()
+            wait.until(dropdown_option_clickable)
+            driver.find_element_by_css_selector(DROPDOWN_OPTION_CSS_SEL).click()    
+            wait.until(first_row_clickable)     # wait until table reloads
+            # update tablesize value?
+        except TimeoutException:
+            print("Timed out while changing table size.")
 
     breakpoint()
     has_next_page = True
 
     while has_next_page:
-        table_contents = driver.execute_script(
-            """
-                return document.querySelector('div[role="rowgroup"]').innerHTML;
-            """
-        )
+        table_contents = driver.execute_script("""
+            return document.querySelector('div[role="rowgroup"]').innerHTML;
+        """)
         soup = BeautifulSoup(table_contents, 'html.parser')
 
         for i, row in enumerate(soup.find_all('div', {'role' : "row"})):
@@ -156,11 +162,9 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
             data.append(row_data)
 
         next_btn_css_sel = 'nav[role="navigation"] > button:last-of-type'
-        has_next_page = not driver.execute_script(
-            f"""
-                return document.querySelector('{next_btn_css_sel}').hasAttribute("disabled")
-            """
-        )
+        has_next_page = not driver.execute_script(f"""
+            return document.querySelector('{next_btn_css_sel}').hasAttribute("disabled")
+        """)
 
         if has_next_page:
             try:
@@ -189,7 +193,7 @@ def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:
     """)
 
 
-def log_in(driver: WebDriver, wait: WebDriverWait):
+def log_in(driver: WebDriver, wait: WebDriverWait) -> None:
     """Log in using credentials from .env file."""
     LOGIN_URL = "https://leetcode.com/accounts/login"
     username = os.getenv('LEETCODE_USERNAME')

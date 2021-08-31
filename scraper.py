@@ -88,16 +88,8 @@ def main():
 def update_problemset(driver: WebDriver, wait: WebDriverWait):
     """Scrape problemset data & write it to a JSON file."""
 
-    # CSS selector constants & expected wait conditions
     PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
-    DROPDOWN_ID = 'headlessui-listbox-button-13'
-    DROPDOWN_OPTION_CSS_SEL = f'ul[aria-labelledby="{DROPDOWN_ID}"] > li:last-of-type'  # last option is "100 / page"
-    dropdown_option_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, DROPDOWN_OPTION_CSS_SEL))
-    FIRST_ROW_CSS_SEL = 'div[role="rowgroup"] > div:first-of-type'
-    first_row_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, FIRST_ROW_CSS_SEL))
-
     driver.get(PROBLEMSET_URL)
-
     
     data = []
 
@@ -112,7 +104,10 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
         else:   # none: "w-5 h-5 text-gray-5 dark:text-dark-gray-5"
             return None
 
-    # TODO: skip the first row of the first page somehow (if it's )
+    # TODO: skip the first row of the first page somehow (if it's special)
+    FIRST_ROW_CSS_SEL = 'div[role="rowgroup"] > div:first-of-type'
+    first_row_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, FIRST_ROW_CSS_SEL))
+
     # row1_is_special = 
     # var row1 = document.querySelector('div[role="rowgroup"] > div:first-of-type');
     # driver.find_element_by_css_selector(first_row_css_sel)
@@ -126,8 +121,12 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
     tablesize_is_100 = driver.execute_script("""
         return document.querySelector('#headlessui-listbox-button-13').innerText == "100 / page";
         """)
-    
+
     if not tablesize_is_100:
+        DROPDOWN_ID = 'headlessui-listbox-button-13'
+        DROPDOWN_OPTION_CSS_SEL = f'ul[aria-labelledby="{DROPDOWN_ID}"] > li:last-of-type'  # last option is "100 / page"
+        dropdown_option_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, DROPDOWN_OPTION_CSS_SEL))
+
         driver.find_element_by_id(DROPDOWN_ID).click()
         wait.until(dropdown_option_clickable)
         driver.find_element_by_css_selector(DROPDOWN_OPTION_CSS_SEL).click()    

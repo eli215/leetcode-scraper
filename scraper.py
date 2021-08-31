@@ -9,6 +9,7 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
 from bs4 import BeautifulSoup, Tag
 import re
 import pyautogui
@@ -87,10 +88,17 @@ def main():
 def update_problemset(driver: WebDriver, wait: WebDriverWait):
     """Scrape problemset data & write it to a JSON file."""
 
+    # CSS selector constants & expected wait conditions
     PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
+    DROPDOWN_ID = 'headlessui-listbox-button-13'
+    DROPDOWN_OPTION_CSS_SEL = f'ul[aria-labelledby="{DROPDOWN_ID}"] > li:last-of-type'  # last option is "100 / page"
+    dropdown_option_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, DROPDOWN_OPTION_CSS_SEL))
+    FIRST_ROW_CSS_SEL = 'div[role="rowgroup"] > div:first-of-type'
+    first_row_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, FIRST_ROW_CSS_SEL))
+
     driver.get(PROBLEMSET_URL)
 
-    has_next_page = True
+    
     data = []
 
     def parse_solution_type(cell: Tag) -> dict:
@@ -104,16 +112,38 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
         else:   # none: "w-5 h-5 text-gray-5 dark:text-dark-gray-5"
             return None
 
-    # TODO: ensure view "100 / page" is selected from dropdown
+    # TODO: skip the first row of the first page somehow (if it's )
+    # row1_is_special = 
+    # var row1 = document.querySelector('div[role="rowgroup"] > div:first-of-type');
+    # driver.find_element_by_css_selector(first_row_css_sel)
+    """
+    var element = document.querySelector(".editor-wrapper__1ru6");
+    if (element)
+        element.parentNode.removeChild(element);
+    """
+
+    # Make sure table size dropdown is set to view 100 problems per page
+    tablesize_is_100 = driver.execute_script("""
+        return document.querySelector('#headlessui-listbox-button-13').innerText == "100 / page";
+        """)
+    
+    if not tablesize_is_100:
+        driver.find_element_by_id(DROPDOWN_ID).click()
+        wait.until(dropdown_option_clickable)
+        driver.find_element_by_css_selector(DROPDOWN_OPTION_CSS_SEL).click()    
+        wait.until(first_row_clickable)     # wait until table reloads
+
+    breakpoint()
+    has_next_page = True
 
     while has_next_page:
-        table_html = driver.execute_script(
+        table_contents = driver.execute_script(
             """
                 return document.querySelector('div[role="rowgroup"]').innerHTML;
             """
         )
-        soup = BeautifulSoup(table_html, 'html.parser')
-        # TODO: skip the first row of the first page somehow
+        soup = BeautifulSoup(table_contents, 'html.parser')
+
         for i, row in enumerate(soup.find_all('div', {'role' : "row"})):
             cells = row.find_all("div", {"role" : "cell"})
             row_data = dict()
@@ -125,20 +155,19 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
             row_data['frequency'] = float(cells[5].select('div[class*="bg-brand-orange"]')[0]['style'][7:-2])
             #row_data['tags'] = {}
             data.append(row_data)
-            # breakpoint()
 
-        next_btn_css_selector = 'nav[role="navigation"] > button:last-of-type'
+        next_btn_css_sel = 'nav[role="navigation"] > button:last-of-type'
         has_next_page = not driver.execute_script(
             f"""
-                return document.querySelector('{next_btn_css_selector}').hasAttribute("disabled")
+                return document.querySelector('{next_btn_css_sel}').hasAttribute("disabled")
             """
         )
 
         if has_next_page:
             try:
-                next_btn_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, next_btn_css_selector))
+                next_btn_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, next_btn_css_sel))
                 wait.until(next_btn_clickable)
-                driver.find_element_by_css_selector(next_btn_css_selector).click()
+                driver.find_element_by_css_selector(next_btn_css_sel).click()
                 # TODO: wait for table element to be clickable to indicate next page has loaded
 
             except TimeoutException:
@@ -149,7 +178,7 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait):
         # Else, we're done              
 
 
-    breakpoint()  
+        breakpoint()  
 
 
 def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:

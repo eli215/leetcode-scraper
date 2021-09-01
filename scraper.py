@@ -11,6 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
 from bs4 import BeautifulSoup, Tag
+import json
 import re
 import pyautogui
 
@@ -29,7 +30,7 @@ def main():
     options = webdriver.ChromeOptions()
     options.add_argument(f"--user-data-dir={CHROMEDATA_DIR}")
     driver = webdriver.Chrome(options=options)
-    wait = WebDriverWait(driver, timeout=60)
+    wait = WebDriverWait(driver, timeout=20)
 
     driver.get(BASE_URL)
     # Log in to Leetcode if necessary
@@ -140,12 +141,10 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> None:
         except TimeoutException:
             print("Timed out while changing table size.")
 
-    breakpoint()
-    has_next_page = True
-
-    while has_next_page:
-        table_contents = driver.execute_script("""
-            return document.querySelector('div[role="rowgroup"]').innerHTML;
+    on_final_page = False
+    while not on_final_page:
+        table_contents = driver.execute_script(f"""
+            return document.querySelector('{TABLE_CSS_SEL}').innerHTML;
         """)
         soup = BeautifulSoup(table_contents, 'html.parser')
 
@@ -162,26 +161,32 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> None:
             data.append(row_data)
 
         next_btn_css_sel = 'nav[role="navigation"] > button:last-of-type'
-        has_next_page = not driver.execute_script(f"""
+        on_final_page = driver.execute_script(f"""
             return document.querySelector('{next_btn_css_sel}').hasAttribute("disabled")
         """)
 
-        if has_next_page:
+        if not on_final_page:
             try:
+                # Navigate to next page
                 next_btn_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, next_btn_css_sel))
                 wait.until(next_btn_clickable)
                 driver.find_element_by_css_selector(next_btn_css_sel).click()
-                # TODO: wait for table element to be clickable to indicate next page has loaded
 
+                TABLE_CONTAINING_DIV_CSS_SEL = 'div[class="-mx-4 md:mx-0 opacity-50 pointer-events-none"]'
+                table_loading = EC.presence_of_element_located((By.CSS_SELECTOR, TABLE_CONTAINING_DIV_CSS_SEL))
+                wait.until(table_loading)   # table is loading
+                wait.until_not(table_loading)   # table is finished loading
+                # wait.until(last_row_clickable)
             except TimeoutException:
-              pass  
-        
-        # <nav role="navigation" class="mb-6 md:mb-0 flex flex-nowrap items-center space-x-2">
-        # If '>' button (next page of problems) is NOT disabled, click it and continue
-        # Else, we're done              
+              print("Timed out while loading next page of problemset.")            
 
-
-        breakpoint()  
+    # Write data to JSON file
+    JSON_FILENAME = "problemset.json"
+    JSON_ROOT_ELEMENT_NAME = "problemset" 
+    with open(JSON_FILENAME, mode='w', encoding='utf-8') as file:
+        json.dump({f"{JSON_ROOT_ELEMENT_NAME}" : data}, file)
+    
+    breakpoint()  
 
 
 def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:

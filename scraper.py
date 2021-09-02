@@ -39,8 +39,8 @@ def main():
     
     # Collect all problem URLs from problemset pages
     # Add to a JSON file
-    update_problemset(driver, wait)
-
+    problemset = update_problemset(driver, wait)
+    breakpoint()
     # Loop through all problems
 
     # Navigate to problem URL
@@ -86,13 +86,13 @@ def main():
 
     }
     """
-def update_problemset(driver: WebDriver, wait: WebDriverWait) -> None:
+def update_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
     """Scrape problemset data & write it to a JSON file."""
 
     PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
     driver.get(PROBLEMSET_URL)
     
-    data = []
+    data = dict()
 
     def parse_solution_type(cell: Tag) -> dict:
         """Determine solution type from cell html."""
@@ -106,27 +106,28 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> None:
             return None
 
     # Remove the first row if it's an out-of-sequence problem promoted by LeetCode
+    # tablesize_actual = driver.execute_script(f"""
+    #     return document.querySelector('{TABLE_CSS_SEL}').childElementCount;
+    # """)
+    
+    # if tablesize_actual > tablesize_setting:
+        # first_row_is_special = True
+        # driver.execute_script(f"""
+        #     var row1 = document.querySelector('{FIRST_ROW_CSS_SEL}');
+        #     if (row1)
+        #         row1.parentNode.removeChild(row1);
+        # """)
+        # tablesize_actual -= 1
+
+    # Make sure table size dropdown is set to view 100 problems per page 
     TABLE_CSS_SEL = 'div[role="rowgroup"]'
     FIRST_ROW_CSS_SEL = f'{TABLE_CSS_SEL} > div:first-of-type'
     DROPDOWN_ID = 'headlessui-listbox-button-13'
 
     tablesize_setting = int(driver.execute_script(f"""
         return document.querySelector('#{DROPDOWN_ID}').innerText;
-    """)[:-7])      # trim " / page" from the string
+    """)[:-7])      # trim " / page"
 
-    tablesize_actual = driver.execute_script(f"""
-        return document.querySelector('{TABLE_CSS_SEL}').childElementCount;
-    """)
-    
-    if tablesize_actual > tablesize_setting:
-        driver.execute_script(f"""
-            var row1 = document.querySelector('{FIRST_ROW_CSS_SEL}');
-            if (row1)
-                row1.parentNode.removeChild(row1);
-        """)
-        tablesize_actual -= 1
-
-    # Make sure table size dropdown is set to view 100 problems per page 
     first_row_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, FIRST_ROW_CSS_SEL))
 
     if tablesize_setting != 100:
@@ -151,14 +152,15 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> None:
         for i, row in enumerate(soup.find_all('div', {'role' : "row"})):
             cells = row.find_all("div", {"role" : "cell"})
             row_data = dict()
+            number, row_data['title'] = cells[1].get_text().split(". ", 1)
+            number = int(number)
             row_data['url'] = BASE_URL + cells[1].find('a')['href']
-            row_data['number'], row_data['title'] = cells[1].get_text().split(". ", 1)
             row_data['solution'] = parse_solution_type(cells[2])
             row_data['acceptance'] = float(cells[3].get_text()[:-1])
             row_data['difficulty'] = cells[4].get_text()
             row_data['frequency'] = float(cells[5].select('div[class*="bg-brand-orange"]')[0]['style'][7:-2])
             #row_data['tags'] = {}
-            data.append(row_data)
+            data[number] = row_data
 
         next_btn_css_sel = 'nav[role="navigation"] > button:last-of-type'
         on_final_page = driver.execute_script(f"""
@@ -172,8 +174,8 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> None:
                 wait.until(next_btn_clickable)
                 driver.find_element_by_css_selector(next_btn_css_sel).click()
 
-                TABLE_CONTAINING_DIV_CSS_SEL = 'div[class="-mx-4 md:mx-0 opacity-50 pointer-events-none"]'
-                table_loading = EC.presence_of_element_located((By.CSS_SELECTOR, TABLE_CONTAINING_DIV_CSS_SEL))
+                DIV_CONTAINING_TABLE_CSS_SEL = 'div[class="-mx-4 md:mx-0 opacity-50 pointer-events-none"]'
+                table_loading = EC.presence_of_element_located((By.CSS_SELECTOR, DIV_CONTAINING_TABLE_CSS_SEL))
                 wait.until(table_loading)   # table is loading
                 wait.until_not(table_loading)   # table is finished loading
                 # wait.until(last_row_clickable)
@@ -186,7 +188,7 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> None:
     with open(JSON_FILENAME, mode='w', encoding='utf-8') as file:
         json.dump({f"{JSON_ROOT_ELEMENT_NAME}" : data}, file)
     
-    breakpoint()  
+    return data  
 
 
 def is_logged_in(driver: WebDriver, wait: WebDriverWait) -> bool:

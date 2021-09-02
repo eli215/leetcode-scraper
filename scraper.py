@@ -18,10 +18,13 @@ import pyautogui
 # Note: research logging best practices
 # LOGFILE = "leetcode_scraper_log.txt"
 BASE_URL = "https://leetcode.com"
+JSON_FILENAME = "problemset.json"
+JSON_ROOT_ELEMENT_NAME = "problemset"
 
 def main():
     # Initial setup
     args = sys.argv[1:]
+    use_existing_problemset_file = True    # TODO: setup CLI arg
     load_dotenv()   # Load .env file
     DIRNAME = os.path.dirname(__file__)
     CHROMEDATA_DIR = os.path.join(DIRNAME, 'ChromeData')
@@ -39,10 +42,16 @@ def main():
     
     # Collect all problem URLs from problemset pages
     # Add to a JSON file
-    problemset = update_problemset(driver, wait)
-    breakpoint()
-    # Loop through all problems
+    problemset = dict()
+    if use_existing_problemset_file:
+        with open(JSON_FILENAME, 'r', encoding='utf-8') as jsonfile:
+            problemset = json.load(jsonfile)['problemset']
+    else:
+        problemset = get_problemset(driver, wait)
 
+    # Loop through all problems
+    for problem in problemset.values():
+        get_problem(driver, wait, problem)
     # Navigate to problem URL
     # url = 'https://leetcode.com/problems/arranging-coins/'
     # driver.get(url)
@@ -51,48 +60,63 @@ def main():
     #     return document.querySelector('[data-key="solution"]').getAttribute("data-disabled") == true;
     # """)
 
-    # Modify Description page HTML w/ JS
-    # - remove code window on right
-    """
-    var element = document.querySelector(".editor-wrapper__1ru6");
-    if (element)
-        element.parentNode.removeChild(element);
-    """
-    # - set left flexbox fill to '1' to fill page width
-    # - if Solution exists, set its menu item href to our local copy
+def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict():
 
-    # Scrape tags and add them to JSON file
+    driver.get(problem['url'])
+    try:
+        loading_is_finished = EC.invisibility_of_element((By.CLASS_NAME, "spinner"))
+        wait.until(loading_is_finished)
+        
+        # Modify Description page HTML w/ JS
+        # - remove code window on right
+        CODE_EDITOR_CSS_SEL = ".editor-wrapper__1ru6"
+        driver.execute_script(f"""
+            var element = document.querySelector(".editor-wrapper__1ru6");
+            if (element)
+                element.parentNode.removeChild(element);
+        """)
+    
+        # - set left flexbox fill to '1' to fill page width
+        DESCRIPTION_WRAPPER_CSS_SEL = ".side-tools-wrapper__1TS9"
+        driver.execute_script(f"""
+            document.querySelector("{DESCRIPTION_WRAPPER_CSS_SEL}").setAttribute('style', "overflow: hidden; flex: 1 1 auto;");
+        """)
 
-    # Save Description page w/ right click Save As
+        # Note: just discovered that the href changes can't be done in the browser:
+        # the base URI defaults to https://leetcode.com even when I explicitly change it.
+        # TODO: (after other in-browser changes)
+        # - download .mhtml
+        # - open file
+        # - make href edits, directing links to our local copy
+        #   - first, add "<base href="~/" />" inside of <head>.
+        #   - then change href values where needed, using "../" for relative path
+        # SOLUTION_HREF_CSS_SEL = "div[data-key='solution'] > a:first-child"
+        # driver.execute_script(f"""
+        #     document.querySelector("{SOLUTION_HREF_CSS_SEL}").setAttribute('href', "overflow: hidden; flex: 1 1 auto;");    
+        # """)
 
-    # Navigate to Solution URL (if applicable)
+        # - direct Next button to local file
 
-    # Modify page HTML w/ JS
-    # - same stuff as above
-    # - set Description menu item href to our local copy
+        # Scrape tags and add them to JSON file
 
-    """
-    title:
-    number:
-    url:
-    filename:
-    solution: {
-        has_video:
-    }
-    acceptance:
-    difficulty:
-    frequency:
-    tags: {
+        # Save Description page w/ right click Save As
 
-    }
-    """
-def update_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
+        # Navigate to Solution URL (if applicable)
+
+        # Modify page HTML w/ JS
+        # - same stuff as above
+        # - set Description menu item href to our local copy
+    except TimeoutException:
+        print(f"Timed out while getting problem #{problem['number']}.")
+    
+    breakpoint()
+    return dict()
+
+def get_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
     """Scrape problemset data & write it to a JSON file."""
 
     PROBLEMSET_URL = "https://leetcode.com/problemset/all/"
     driver.get(PROBLEMSET_URL)
-    
-    data = dict()
 
     def parse_solution_type(cell: Tag) -> dict:
         """Determine solution type from cell html."""
@@ -104,20 +128,6 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
             return {'has_video' : True}
         else:   # none: "w-5 h-5 text-gray-5 dark:text-dark-gray-5"
             return None
-
-    # Remove the first row if it's an out-of-sequence problem promoted by LeetCode
-    # tablesize_actual = driver.execute_script(f"""
-    #     return document.querySelector('{TABLE_CSS_SEL}').childElementCount;
-    # """)
-    
-    # if tablesize_actual > tablesize_setting:
-        # first_row_is_special = True
-        # driver.execute_script(f"""
-        #     var row1 = document.querySelector('{FIRST_ROW_CSS_SEL}');
-        #     if (row1)
-        #         row1.parentNode.removeChild(row1);
-        # """)
-        # tablesize_actual -= 1
 
     # Make sure table size dropdown is set to view 100 problems per page 
     TABLE_CSS_SEL = 'div[role="rowgroup"]'
@@ -142,6 +152,7 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
         except TimeoutException:
             print("Timed out while changing table size.")
 
+    data = dict()
     on_final_page = False
     while not on_final_page:
         table_contents = driver.execute_script(f"""
@@ -152,39 +163,39 @@ def update_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
         for i, row in enumerate(soup.find_all('div', {'role' : "row"})):
             cells = row.find_all("div", {"role" : "cell"})
             row_data = dict()
-            number, row_data['title'] = cells[1].get_text().split(". ", 1)
-            number = int(number)
+
+            # added 'number' back temporarily while I decide what to do
+            row_data['number'], row_data['title'] = cells[1].get_text().split(". ", 1)
+            row_data['number'] = int(row_data['number'])
+            # number = int(number)
             row_data['url'] = BASE_URL + cells[1].find('a')['href']
             row_data['solution'] = parse_solution_type(cells[2])
             row_data['acceptance'] = float(cells[3].get_text()[:-1])
             row_data['difficulty'] = cells[4].get_text()
             row_data['frequency'] = float(cells[5].select('div[class*="bg-brand-orange"]')[0]['style'][7:-2])
-            #row_data['tags'] = {}
-            data[number] = row_data
 
-        next_btn_css_sel = 'nav[role="navigation"] > button:last-of-type'
+            data[row_data['number']] = row_data
+
+        NEXT_BTN_CSS_SEL = 'nav[role="navigation"] > button:last-of-type'
         on_final_page = driver.execute_script(f"""
-            return document.querySelector('{next_btn_css_sel}').hasAttribute("disabled")
+            return document.querySelector('{NEXT_BTN_CSS_SEL}').hasAttribute("disabled")
         """)
 
         if not on_final_page:
             try:
                 # Navigate to next page
-                next_btn_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, next_btn_css_sel))
+                next_btn_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, NEXT_BTN_CSS_SEL))
                 wait.until(next_btn_clickable)
-                driver.find_element_by_css_selector(next_btn_css_sel).click()
+                driver.find_element_by_css_selector(NEXT_BTN_CSS_SEL).click()
 
                 DIV_CONTAINING_TABLE_CSS_SEL = 'div[class="-mx-4 md:mx-0 opacity-50 pointer-events-none"]'
                 table_loading = EC.presence_of_element_located((By.CSS_SELECTOR, DIV_CONTAINING_TABLE_CSS_SEL))
                 wait.until(table_loading)   # table is loading
                 wait.until_not(table_loading)   # table is finished loading
-                # wait.until(last_row_clickable)
             except TimeoutException:
               print("Timed out while loading next page of problemset.")            
 
-    # Write data to JSON file
-    JSON_FILENAME = "problemset.json"
-    JSON_ROOT_ELEMENT_NAME = "problemset" 
+    # Write data to JSON file 
     with open(JSON_FILENAME, mode='w', encoding='utf-8') as file:
         json.dump({f"{JSON_ROOT_ELEMENT_NAME}" : data}, file)
     

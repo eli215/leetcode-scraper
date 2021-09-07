@@ -32,6 +32,7 @@ def main():
     # Initialize webdriver
     options = webdriver.ChromeOptions()
     options.add_argument(f"--user-data-dir={CHROMEDATA_DIR}")
+    options.add_argument('--save-page-as-mhtml')
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, timeout=20)
 
@@ -50,7 +51,11 @@ def main():
         problemset = get_problemset(driver, wait)
 
     # Loop through all problems
+    first = True
     for problem in problemset.values():
+        if first:
+            first = False
+            continue
         get_problem(driver, wait, problem)
     # Navigate to problem URL
     # url = 'https://leetcode.com/problems/arranging-coins/'
@@ -82,11 +87,53 @@ def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict
             document.querySelector("{DESCRIPTION_WRAPPER_CSS_SEL}").setAttribute('style', "overflow: hidden; flex: 1 1 auto;");
         """)
 
+        # expand boxes (Companies, Tags, Hints, etc.)
+        collapsed_section_class = "css-1hky5w4"
+        expanded_section_class = "css-h4mluo"
+        collapsed_sections_class = "css-1jqueqk"
+        more_btn_class = "css-1c1eaiw"
+        less_btn_class = "css-bz07qb"   # expanded contents
+        # driver.find
+        for section in driver.find_elements_by_class_name(collapsed_sections_class):
+            btn = section.find_element_by_css_selector('div:first-child')
+            
+            wait.until(EC.element_to_be_clickable((By.ID, btn.id)))
+            btn.click()
+            # section
+        
+        for more_btn in driver.find_elements_by_class_name(more_btn_class):
+            breakpoint()
+            more_btn.click()
+
+        # driver.execute_script(f"""
+        #     var extraSections = document.getElementsByClassName("{collapsed_section_class}");
+        #     for (var i = (extraSections.length - 1); i >= 0; i--) {{
+        #         extraSections[i].className = "{expanded_section_class}";
+        #     }}
+        #     var moreButtons = document.getElementsByClassName("{more_btn_class}");
+        #     for (var i = (moreButtons.length - 1); i >= 0; i--) {{
+        #         moreButtons[i].classname = "{less_btn_class}"
+        #     }}
+        # """)
+
+        # if there are any "More" buttons, expand their contents
+        
+        # driver.find
+        padded_prob_num = f"{problem['number']:04}"
+        hyphenated_prob_name = f"{problem['url'][problem['url'].rfind('/'):]}"
+        problem_filename = f"{padded_prob_num}_{hyphenated_prob_name}.mhtml"
+        breakpoint()
+        if problem['solution'] is not None:
+            solution_filename = f"{padded_prob_num}_solution_{hyphenated_prob_name}.mhtml"
+
+            # TODO: change solution href to solution_filename
+            # soup = BeautifulSoup
+
         # Note: just discovered that the href changes can't be done in the browser:
         # the base URI defaults to https://leetcode.com even when I explicitly change it.
         # TODO: (after other in-browser changes)
         # - download .mhtml
-        # - open file
+        # - open file w/ bs4
         # - make href edits, directing links to our local copy
         #   - first, add "<base href="~/" />" inside of <head>.
         #   - then change href values where needed, using "../" for relative path
@@ -94,10 +141,16 @@ def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict
         # driver.execute_script(f"""
         #     document.querySelector("{SOLUTION_HREF_CSS_SEL}").setAttribute('href', "overflow: hidden; flex: 1 1 auto;");    
         # """)
+        """
+        <script type="text/javascript">
+        document.getElementsByTagName('head')[0].setAttribute('href', "../");
+        alert("yoo");
+        </script>
+        """
 
         # - direct Next button to local file
 
-        # Scrape tags and add them to JSON file
+        # TODO: Scrape tags and add them to JSON file
 
         # Save Description page w/ right click Save As
 
@@ -111,6 +164,12 @@ def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict
     
     breakpoint()
     return dict()
+
+
+def get_solution(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> None:
+    """Modify and download the solution to the given problem."""
+    pass
+
 
 def get_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
     """Scrape problemset data & write it to a JSON file."""
@@ -134,6 +193,7 @@ def get_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
     FIRST_ROW_CSS_SEL = f'{TABLE_CSS_SEL} > div:first-of-type'
     DROPDOWN_ID = 'headlessui-listbox-button-13'
 
+    # TODO: skip first item if it's a LeetCode sponsored question (wrong url)
     tablesize_setting = int(driver.execute_script(f"""
         return document.querySelector('#{DROPDOWN_ID}').innerText;
     """)[:-7])      # trim " / page"
@@ -165,10 +225,11 @@ def get_problemset(driver: WebDriver, wait: WebDriverWait) -> dict:
             row_data = dict()
 
             # added 'number' back temporarily while I decide what to do
-            row_data['number'], row_data['title'] = cells[1].get_text().split(". ", 1)
+            row_data['number'], 
+            row_data['title'] = cells[1].get_text().split(". ", 1)
             row_data['number'] = int(row_data['number'])
             # number = int(number)
-            row_data['url'] = BASE_URL + cells[1].find('a')['href']
+            row_data['url'] = BASE_URL + cells[1].find('a')['href'].removesuffix('/')
             row_data['solution'] = parse_solution_type(cells[2])
             row_data['acceptance'] = float(cells[3].get_text()[:-1])
             row_data['difficulty'] = cells[4].get_text()

@@ -87,42 +87,27 @@ def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict
             document.querySelector("{DESCRIPTION_WRAPPER_CSS_SEL}").setAttribute('style', "overflow: hidden; flex: 1 1 auto;");
         """)
 
-        # expand boxes (Companies, Tags, Hints, etc.)
-        collapsed_section_class = "css-1hky5w4"
-        expanded_section_class = "css-h4mluo"
-        collapsed_sections_class = "css-1jqueqk"
-        more_btn_class = "btn-content__2V4r"#"css-1c1eaiw"
-        MORE_BTN_CSS_SEL = ".css-1c1eaiw .btn-content__2V4r"
-        less_btn_class = "css-bz07qb"   # expanded contents
+        # Expand boxes (Companies, Tags, Hints, etc.)
         EXTRA_SECTIONS_CSS_SEL = '.css-1jqueqk [class^="header__"]'
-        # driver.find
-        
+        MORE_BTN_CSS_SEL = ".btn__1z2C.btn-md__M51O.show-more__2LD1"
+
+        # Click in reverse, otherwise the downward expansion messes with subsequent clicks.
         for section in reversed(driver.find_elements_by_css_selector(EXTRA_SECTIONS_CSS_SEL)):
-            # btn = section.find_element_by_css_selector('div:first-child')
+
             section_class = section.get_attribute('class')
             section_clickable = EC.element_to_be_clickable((By.CLASS_NAME, section_class))
             wait.until(section_clickable)
             section.click()
-
-        breakpoint()
-        for more_btn in driver.find_elements_by_class_name(more_btn_class):
-            breakpoint()
-            more_btn.click()
-
-        # driver.execute_script(f"""
-        #     var extraSections = document.getElementsByClassName("{collapsed_section_class}");
-        #     for (var i = (extraSections.length - 1); i >= 0; i--) {{
-        #         extraSections[i].className = "{expanded_section_class}";
-        #     }}
-        #     var moreButtons = document.getElementsByClassName("{more_btn_class}");
-        #     for (var i = (moreButtons.length - 1); i >= 0; i--) {{
-        #         moreButtons[i].classname = "{less_btn_class}"
-        #     }}
-        # """)
-
-        # if there are any "More" buttons, expand their contents
         
-        # driver.find
+        # If there are any "More" buttons, expand their contents
+        # Note: I've only ever seen one 'More' button (under Companies). Make a loop if more show up.
+        more_btns = driver.find_elements_by_css_selector(MORE_BTN_CSS_SEL)
+        if more_btns:
+            more_btn_clickable = EC.element_to_be_clickable((By.CSS_SELECTOR, MORE_BTN_CSS_SEL))
+            wait.until(more_btn_clickable)
+            more_btns[0].click()
+        
+        # 
         padded_prob_num = f"{problem['number']:04}"
         hyphenated_prob_name = f"{problem['url'][problem['url'].rfind('/'):]}"
         problem_filename = f"{padded_prob_num}_{hyphenated_prob_name}.mhtml"

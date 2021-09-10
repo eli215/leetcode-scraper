@@ -91,16 +91,20 @@ def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict
         collapsed_section_class = "css-1hky5w4"
         expanded_section_class = "css-h4mluo"
         collapsed_sections_class = "css-1jqueqk"
-        more_btn_class = "css-1c1eaiw"
+        more_btn_class = "btn-content__2V4r"#"css-1c1eaiw"
+        MORE_BTN_CSS_SEL = ".css-1c1eaiw .btn-content__2V4r"
         less_btn_class = "css-bz07qb"   # expanded contents
+        EXTRA_SECTIONS_CSS_SEL = '.css-1jqueqk [class^="header__"]'
         # driver.find
-        for section in driver.find_elements_by_class_name(collapsed_sections_class):
-            btn = section.find_element_by_css_selector('div:first-child')
-            
-            wait.until(EC.element_to_be_clickable((By.ID, btn.id)))
-            btn.click()
-            # section
         
+        for section in reversed(driver.find_elements_by_css_selector(EXTRA_SECTIONS_CSS_SEL)):
+            # btn = section.find_element_by_css_selector('div:first-child')
+            section_class = section.get_attribute('class')
+            section_clickable = EC.element_to_be_clickable((By.CLASS_NAME, section_class))
+            wait.until(section_clickable)
+            section.click()
+
+        breakpoint()
         for more_btn in driver.find_elements_by_class_name(more_btn_class):
             breakpoint()
             more_btn.click()

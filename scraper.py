@@ -10,6 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver import ActionChains
 from bs4 import BeautifulSoup, Tag
 import json
 import re
@@ -26,13 +27,23 @@ def main():
     args = sys.argv[1:]
     use_existing_problemset_file = True    # TODO: setup CLI arg
     load_dotenv()   # Load .env file
-    DIRNAME = os.path.dirname(__file__)
-    CHROMEDATA_DIR = os.path.join(DIRNAME, 'ChromeData')
+    DIRNAME = os.path.dirname(os.path.realpath(sys.argv[0]))
+    CHROMEDATA_DIR = os.path.join(DIRNAME, "ChromeData")
+    DOWNLOAD_DIR = os.path.join(DIRNAME, "problems")
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
     # Initialize webdriver
     options = webdriver.ChromeOptions()
     options.add_argument(f"--user-data-dir={CHROMEDATA_DIR}")
     options.add_argument('--save-page-as-mhtml')
+    options.add_argument("--start-maximized")
+    prefs = {
+            # "profile.default_content_settings.popups": 0,
+            'download.default_directory' : f"{DOWNLOAD_DIR}",
+            'directory_upgrade': True
+    }
+    options.add_experimental_option("prefs", prefs)
+    
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, timeout=20)
 
@@ -73,25 +84,26 @@ def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict
         wait.until(loading_is_finished)
         
         # Modify Description page HTML w/ JS
-        # - remove code window on right
+        # Remove code window on right
         CODE_EDITOR_CSS_SEL = ".editor-wrapper__1ru6"
         driver.execute_script(f"""
-            var element = document.querySelector(".editor-wrapper__1ru6");
+            var element = document.querySelector("{CODE_EDITOR_CSS_SEL}");
             if (element)
                 element.parentNode.removeChild(element);
         """)
     
-        # - set left flexbox fill to '1' to fill page width
+        # Expand description flexbox to fill page width
         DESCRIPTION_WRAPPER_CSS_SEL = ".side-tools-wrapper__1TS9"
+        DESCRIPTION_WRAPPER_NEW_STYLE = "overflow: hidden; flex: 1 1 auto;"
         driver.execute_script(f"""
-            document.querySelector("{DESCRIPTION_WRAPPER_CSS_SEL}").setAttribute('style', "overflow: hidden; flex: 1 1 auto;");
+            document.querySelector("{DESCRIPTION_WRAPPER_CSS_SEL}").setAttribute('style', "{DESCRIPTION_WRAPPER_NEW_STYLE}");
         """)
 
         # Expand boxes (Companies, Tags, Hints, etc.)
         EXTRA_SECTIONS_CSS_SEL = '.css-1jqueqk [class^="header__"]'
         MORE_BTN_CSS_SEL = ".btn__1z2C.btn-md__M51O.show-more__2LD1"
 
-        # Click in reverse, otherwise the downward expansion messes with subsequent clicks.
+        # Click them bottom-up, otherwise downward expansion messes with subsequent clicks.
         for section in reversed(driver.find_elements_by_css_selector(EXTRA_SECTIONS_CSS_SEL)):
 
             section_class = section.get_attribute('class')
@@ -109,10 +121,12 @@ def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict
         
         # 
         padded_prob_num = f"{problem['number']:04}"
-        hyphenated_prob_name = f"{problem['url'][problem['url'].rfind('/'):]}"
+        hyphenated_prob_name = f"{problem['url'][problem['url'].rfind('/')+1:]}"
         problem_filename = f"{padded_prob_num}_{hyphenated_prob_name}.mhtml"
+
+        save_page(problem_filename)
         breakpoint()
-        if problem['solution'] is not None:
+        if None is not problem['solution']:
             solution_filename = f"{padded_prob_num}_solution_{hyphenated_prob_name}.mhtml"
 
             # TODO: change solution href to solution_filename
@@ -153,6 +167,11 @@ def get_problem(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> dict
     
     breakpoint()
     return dict()
+
+
+def save_page(filename: str) -> None:
+    pyautogui.hotkey('ctrl', 's')
+
 
 
 def get_solution(driver: WebDriver, wait: WebDriverWait, problem: dict()) -> None:
